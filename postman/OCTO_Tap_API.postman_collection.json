@@ -1,0 +1,583 @@
+{
+  "info": {
+    "_postman_id": "octo-tap-collection-v1",
+    "name": "OCTO Tap — Google Review NFC & QR API",
+    "description": "Comprehensive API collection for OCTO Tap (Google Review NFC + QR registration, issuance, QC, lifecycle management, and public redirect).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{admin_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "01. Auth",
+      "item": [
+        {
+          "name": "Admin Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data.token) {",
+                  "    pm.environment.set('admin_token', jsonData.data.token);",
+                  "    console.log('Saved admin_token to environment');",
+                  "}",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Admin Profile (Me)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "auth", "me"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Businesses",
+      "item": [
+        {
+          "name": "Create Business",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data.id) {",
+                  "    pm.environment.set('business_id', jsonData.data.id);",
+                  "    console.log('Saved new business_id:', jsonData.data.id);",
+                  "}",
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Restoran Sederhana Sudirman\",\n  \"google_review_url\": \"https://g.page/r/CSederhanaReviewDemo/review\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/businesses",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "businesses"]
+            }
+          }
+        },
+        {
+          "name": "List Businesses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/businesses?search=&status=&limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "businesses"],
+              "query": [
+                { "key": "search", "value": "" },
+                { "key": "status", "value": "" },
+                { "key": "limit", "value": "20" },
+                { "key": "offset", "value": "0" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Business Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/businesses/{{business_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "businesses", "{{business_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Business",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Restoran Sederhana Sudirman (Updated)\",\n  \"google_review_url\": \"https://maps.app.goo.gl/k98274jkhsd89\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/businesses/{{business_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "businesses", "{{business_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Verify Business URL",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/businesses/{{business_id}}/verify-url",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "businesses", "{{business_id}}", "verify-url"]
+            }
+          }
+        },
+        {
+          "name": "Batch Issue Cards for Business",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data.cards && jsonData.data.cards.length > 0) {",
+                  "    pm.environment.set('card_id', jsonData.data.cards[0].id);",
+                  "    pm.environment.set('card_token', jsonData.data.cards[0].token);",
+                  "    console.log('Saved card_id:', jsonData.data.cards[0].id);",
+                  "    console.log('Saved card_token:', jsonData.data.cards[0].token);",
+                  "}",
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "batch-req-{{$timestamp}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/businesses/{{business_id}}/cards",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "businesses", "{{business_id}}", "cards"]
+            }
+          }
+        },
+        {
+          "name": "Get Business Production Manifest",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/businesses/{{business_id}}/manifest",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "businesses", "{{business_id}}", "manifest"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Cards & Inventory",
+      "item": [
+        {
+          "name": "Issue Stock Cards (Model B - Pre-printed Stock)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data.cards && jsonData.data.cards.length > 0) {",
+                  "    pm.environment.set('card_id', jsonData.data.cards[0].id);",
+                  "    pm.environment.set('card_token', jsonData.data.cards[0].token);",
+                  "    console.log('Saved Model B stock card_id:', jsonData.data.cards[0].id);",
+                  "}",
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "stock-req-{{$timestamp}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 10\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/cards/issue-stock",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "cards", "issue-stock"]
+            }
+          }
+        },
+        {
+          "name": "Assign & Activate Stock Card (Model B - Link Business)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"business_name\": \"Kopi Kenangan Senopati\",\n  \"google_review_url\": \"https://maps.app.goo.gl/octoDemo123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/cards/{{card_id}}/assign-activate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "cards", "{{card_id}}", "assign-activate"]
+            }
+          }
+        },
+        {
+          "name": "List Cards",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/cards?business_id=&batch_id=&status=&search=&limit=50&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "cards"],
+              "query": [
+                { "key": "business_id", "value": "" },
+                { "key": "batch_id", "value": "" },
+                { "key": "status", "value": "" },
+                { "key": "search", "value": "" },
+                { "key": "limit", "value": "50" },
+                { "key": "offset", "value": "0" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Card Detail with History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/cards/{{card_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "cards", "{{card_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Generate QR Code (Base64)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/cards/{{card_id}}/generate-qr",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "cards", "{{card_id}}", "generate-qr"]
+            }
+          }
+        },
+        {
+          "name": "Download QR Code PNG Image",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/cards/{{card_id}}/qr.png",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "cards", "{{card_id}}", "qr.png"]
+            }
+          }
+        },
+        {
+          "name": "Record Production Event (NFC Written)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_type\": \"NFC_WRITTEN\",\n  \"payload\": {\n    \"device\": \"ACR122U NFC Writer\",\n    \"written_url\": \"{{base_url}}/r/{{card_token}}\"\n  },\n  \"notes\": \"NDEF URI tag successfully programmed\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/cards/{{card_id}}/production-events",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "cards", "{{card_id}}", "production-events"]
+            }
+          }
+        },
+        {
+          "name": "Record Production Event (NFC Verified)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_type\": \"NFC_VERIFIED\",\n  \"payload\": {\n    \"read_url\": \"{{base_url}}/r/{{card_token}}\"\n  },\n  \"notes\": \"NFC read matches exact redirect URL\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/cards/{{card_id}}/production-events",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "cards", "{{card_id}}", "production-events"]
+            }
+          }
+        },
+        {
+          "name": "Record Production Event (QC Passed)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_type\": \"QC_PASSED\",\n  \"payload\": {\n    \"surface_check\": \"Pass\",\n    \"print_quality\": \"Sharp\",\n    \"nfc_reading\": \"Optimal\"\n  },\n  \"notes\": \"Card physical and digital inspection passed\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/cards/{{card_id}}/production-events",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "cards", "{{card_id}}", "production-events"]
+            }
+          }
+        },
+        {
+          "name": "Activate Card",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/cards/{{card_id}}/activate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "cards", "{{card_id}}", "activate"]
+            }
+          }
+        },
+        {
+          "name": "Deactivate Card",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/cards/{{card_id}}/deactivate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "cards", "{{card_id}}", "deactivate"]
+            }
+          }
+        },
+        {
+          "name": "Revoke Card",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/cards/{{card_id}}/revoke",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "cards", "{{card_id}}", "revoke"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04. Production Manifest",
+      "item": [
+        {
+          "name": "Get Batch / Global Manifest",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/manifest?batch_id=&business_id=",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "manifest"],
+              "query": [
+                { "key": "batch_id", "value": "" },
+                { "key": "business_id", "value": "" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05. Audit Logs",
+      "item": [
+        {
+          "name": "List Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/audit-logs?entity_type=&entity_id=&action=&admin_email=&limit=50&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "audit-logs"],
+              "query": [
+                { "key": "entity_type", "value": "" },
+                { "key": "entity_id", "value": "" },
+                { "key": "action", "value": "" },
+                { "key": "admin_email", "value": "" },
+                { "key": "limit", "value": "50" },
+                { "key": "offset", "value": "0" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06. Public Redirect API",
+      "item": [
+        {
+          "name": "Public Redirect (GET)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/r/{{card_token}}",
+              "host": ["{{base_url}}"],
+              "path": ["r", "{{card_token}}"]
+            }
+          }
+        },
+        {
+          "name": "Public Redirect Check (HEAD)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "HEAD",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/r/{{card_token}}",
+              "host": ["{{base_url}}"],
+              "path": ["r", "{{card_token}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07. Healthcheck",
+      "item": [
+        {
+          "name": "System Health",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

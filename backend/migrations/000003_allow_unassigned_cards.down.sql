@@ -1,0 +1,2 @@
+DELETE FROM cards WHERE business_id IS NULL;
+ALTER TABLE cards ALTER COLUMN business_id SET NOT NULL;
