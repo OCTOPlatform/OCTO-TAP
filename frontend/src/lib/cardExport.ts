@@ -5,13 +5,17 @@
  * Mencegah kesalahan tertukar (mismatch) antara QR Code, kode fisik kartu, dan chip NFC.
  */
 
+import JSZip from 'jszip';
+
+export type CardDesignTheme = 'octo_navy' | 'octo_frosted' | 'google_white' | 'luxury_gold';
+
 export interface ExportArtworkOptions {
   businessName: string;
   cardCode: string;
   token: string;
   qrCodeUrl?: string;
   redirectUrl: string;
-  theme: 'octo_navy' | 'octo_frosted' | 'google_white' | 'luxury_gold';
+  theme: CardDesignTheme;
   side: 'front' | 'back';
 }
 
@@ -22,6 +26,23 @@ export interface ExportProductionLabelOptions {
   token: string;
   qrCodeUrl?: string;
   redirectUrl: string;
+}
+
+export interface BulkCardItem {
+  id: string;
+  cardCode: string;
+  token: string;
+  batchId?: string;
+  businessName?: string;
+  qrCodeUrl?: string;
+  redirectUrl: string;
+}
+
+export interface BulkExportOptions {
+  cards: BulkCardItem[];
+  theme: 'octo_navy' | 'octo_frosted' | 'google_white' | 'luxury_gold';
+  exportType: 'all' | 'artwork_only' | 'labels_only';
+  onProgress?: (progress: { current: number; total: number; cardCode: string; percent: number; status: string }) => void;
 }
 
 // Helper: Memuat gambar secara asynchronous
@@ -71,9 +92,9 @@ const drawStar = (
 };
 
 /**
- * 1. Ekspor Desain Kartu Utuh (Print Artwork) - Skala 100x100mm @ 300 DPI (1200x1200px)
+ * 1. Generate Canvas Desain Kartu Utuh (Print Artwork) - Skala 100x100mm @ 300 DPI (1200x1200px)
  */
-export async function exportCardArtworkPNG(options: ExportArtworkOptions): Promise<void> {
+export async function generateCardArtworkCanvas(options: ExportArtworkOptions): Promise<HTMLCanvasElement> {
   const { businessName, cardCode, qrCodeUrl, redirectUrl, theme, side } = options;
 
   const width = 1200;
@@ -241,11 +262,12 @@ export async function exportCardArtworkPNG(options: ExportArtworkOptions): Promi
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // 2. Business Name & Stars
+    // 2. Business Name & Stars (Model B default: "Review Us on Google")
     ctx.textAlign = 'center';
     ctx.font = 'bold 40px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillStyle = cfg.titleColor;
-    const bizText = businessName || 'Nama Usaha / Bisnis';
+    const isModelB = !businessName || businessName.toLowerCase() === 'bisnis' || businessName.toLowerCase() === 'nama usaha / bisnis' || businessName.trim() === '';
+    const bizText = isModelB ? 'Review Us on Google' : businessName;
     const displayBiz = bizText.length > 28 ? bizText.slice(0, 27) + '...' : bizText;
     ctx.fillText(displayBiz, width / 2, headerY + 150);
 
@@ -260,7 +282,8 @@ export async function exportCardArtworkPNG(options: ExportArtworkOptions): Promi
     // Call to Action
     ctx.font = '500 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillStyle = cfg.subtitleColor;
-    ctx.fillText('Tap NFC atau Scan QR untuk Ulas Kami di Google', width / 2, headerY + 260);
+    const ctaText = isModelB ? 'Tap NFC atau Scan QR Code' : 'Tap NFC atau Scan QR untuk Ulas Kami di Google';
+    ctx.fillText(ctaText, width / 2, headerY + 260);
 
     // 3. QR Code Box (Wajib Solid White Base untuk Mesin Cetak UV)
     const qrBoxSize = 480;
@@ -409,17 +432,22 @@ export async function exportCardArtworkPNG(options: ExportArtworkOptions): Promi
   ctx.strokeStyle = cfg.borderColor;
   ctx.stroke();
 
-  // Trigger Download
-  const filename = `${cardCode || 'OCTO'}-${theme}-${side === 'front' ? 'depan' : 'belakang'}.png`;
+  // Return Canvas
+  return canvas;
+}
+
+export async function exportCardArtworkPNG(options: ExportArtworkOptions): Promise<void> {
+  const canvas = await generateCardArtworkCanvas(options);
+  const filename = `${options.cardCode || 'OCTO'}-${options.theme}-${options.side === 'front' ? 'depan' : 'belakang'}.png`;
   downloadCanvasAsPNG(canvas, filename);
 }
 
 /**
- * 2. Ekspor Lembar Verifikasi Produksi (Production Sheet / QR Badge Label)
+ * 2. Generate Canvas Lembar Verifikasi Produksi (Production Sheet / QR Badge Label)
  * Ukuran: 800 x 1060 px
  * Berisi QR Code tajam + Kotak data identitas super jelas agar anti-tertukar di percetakan.
  */
-export async function exportProductionLabelPNG(options: ExportProductionLabelOptions): Promise<void> {
+export async function generateProductionLabelCanvas(options: ExportProductionLabelOptions): Promise<HTMLCanvasElement> {
   const { businessName, cardCode, batchId, token, qrCodeUrl, redirectUrl } = options;
 
   const width = 800;
@@ -514,7 +542,8 @@ export async function exportProductionLabelPNG(options: ExportProductionLabelOpt
     ctx.fillText(valText, infoX + 185, yPos);
   };
 
-  drawRow('BISNIS', businessName || 'Stok Gudang (Belum Dihubungkan)', infoY + 115);
+  const isModelB = !businessName || businessName.toLowerCase() === 'bisnis' || businessName.toLowerCase() === 'nama usaha / bisnis' || businessName.trim() === '';
+  drawRow('BISNIS', isModelB ? 'Stok Model B (Review Us on Google)' : businessName, infoY + 115);
   drawRow('BATCH ID', batchId || 'BATCH-PRODUCTION-01', infoY + 155, true);
   drawRow('NFC URL', redirectUrl, infoY + 195, true);
   drawRow('TOKEN', token ? token.slice(0, 24) + '...' : 'CSPRNG-SECURE', infoY + 235, true);
@@ -529,8 +558,123 @@ export async function exportProductionLabelPNG(options: ExportProductionLabelOpt
     height - 40
   );
 
-  const filename = `${cardCode || 'OCTO'}-label-produksi.png`;
+  return canvas;
+}
+
+export async function exportProductionLabelPNG(options: ExportProductionLabelOptions): Promise<void> {
+  const canvas = await generateProductionLabelCanvas(options);
+  const filename = `${options.cardCode || 'OCTO'}-label-produksi.png`;
   downloadCanvasAsPNG(canvas, filename);
+}
+
+/**
+ * 3. Ekspor Massal Seluruh Kartu Model B ke format ZIP (Bulk Production Package)
+ */
+export async function generateBulkProductionZip(options: BulkExportOptions): Promise<void> {
+  const { cards, theme, exportType, onProgress } = options;
+  if (!cards.length) throw new Error('Tidak ada kartu untuk diekspor');
+
+  const zip = new JSZip();
+  const total = cards.length;
+
+  let manifestContent = `=========================================================\n`;
+  manifestContent += `OCTO TAP - PAKET DESAIN PRODUKSI MASSAL (MODEL B)\n`;
+  manifestContent += `Tanggal Cetak : ${new Date().toLocaleString('id-ID')}\n`;
+  manifestContent += `Total Kartu   : ${total} pcs\n`;
+  manifestContent += `Tema Desain   : ${theme.toUpperCase()}\n`;
+  manifestContent += `Teks Standar  : Review Us on Google (5 Bintang Emas)\n`;
+  manifestContent += `=========================================================\n\n`;
+  manifestContent += `DAFTAR IDENTITAS KARTU, TOKEN & NFC URL:\n`;
+  manifestContent += `No | Kode Kartu | Batch ID | Token (CSPRNG) | URL NFC & QR\n`;
+  manifestContent += `---------------------------------------------------------\n`;
+
+  for (let i = 0; i < cards.length; i++) {
+    const card = cards[i];
+    const cardCode = card.cardCode || `OCTO-${i + 1}`;
+    const percent = Math.round(((i + 0.5) / total) * 90);
+
+    onProgress?.({
+      current: i + 1,
+      total,
+      cardCode,
+      percent,
+      status: `Membuat artwork & data kartu ${i + 1} dari ${total} (${cardCode})...`,
+    });
+
+    manifestContent += `${i + 1}. | ${cardCode} | ${card.batchId || '-'} | ${card.token} | ${card.redirectUrl}\n`;
+
+    // 1. Artwork Kartu Akrilik (Depan)
+    if (exportType === 'all' || exportType === 'artwork_only') {
+      const artworkCanvas = await generateCardArtworkCanvas({
+        businessName: card.businessName || 'Review Us on Google',
+        cardCode: card.cardCode,
+        token: card.token,
+        qrCodeUrl: card.qrCodeUrl,
+        redirectUrl: card.redirectUrl,
+        theme,
+        side: 'front',
+      });
+
+      const blob = await new Promise<Blob | null>((resolve) =>
+        artworkCanvas.toBlob(resolve, 'image/png', 1.0)
+      );
+      if (blob) {
+        const folder = exportType === 'all' ? zip.folder('1_Artwork_Cetak_UV_Akrilik') : zip;
+        folder?.file(`${cardCode}_Artwork_Depan_${theme}.png`, blob);
+      }
+    }
+
+    // 2. Lembar Kontrol Produksi (Production Sheet)
+    if (exportType === 'all' || exportType === 'labels_only') {
+      const labelCanvas = await generateProductionLabelCanvas({
+        businessName: card.businessName || 'Review Us on Google',
+        cardCode: card.cardCode,
+        batchId: card.batchId,
+        token: card.token,
+        qrCodeUrl: card.qrCodeUrl,
+        redirectUrl: card.redirectUrl,
+      });
+
+      const labelBlob = await new Promise<Blob | null>((resolve) =>
+        labelCanvas.toBlob(resolve, 'image/png', 1.0)
+      );
+      if (labelBlob) {
+        const folder = exportType === 'all' ? zip.folder('2_Lembar_Kontrol_Produksi_NFC_QR') : zip;
+        folder?.file(`${cardCode}_Lembar_Kontrol_Produksi.png`, labelBlob);
+      }
+    }
+  }
+
+  // Tambahkan Manifest / Lembar Instruksi Produksi
+  zip.file('MANIFEST_PRODUKSI_MASSAL.txt', manifestContent);
+
+  onProgress?.({
+    current: total,
+    total,
+    cardCode: '',
+    percent: 92,
+    status: 'Mengompresi file ke ZIP berkecepatan tinggi...',
+  });
+
+  const zipBlob = await zip.generateAsync({ type: 'blob' }, (metadata) => {
+    onProgress?.({
+      current: total,
+      total,
+      cardCode: '',
+      percent: 90 + Math.round((metadata.percent / 100) * 10),
+      status: `Mengompresi ZIP (${Math.round(metadata.percent)}%)...`,
+    });
+  });
+
+  // Trigger Download ZIP ke Browser
+  const filename = `OCTO_TAP_ModelB_Desain_Produksi_${Date.now()}.zip`;
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(zipBlob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
 // Helper: Download file via anchor

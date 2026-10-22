@@ -30,6 +30,30 @@ function ActivationContent() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [showSalesEasterEgg, setShowSalesEasterEgg] = useState(false);
+
+  // Easter egg: mendeteksi pengetikan kata kunci "elzein"
+  useEffect(() => {
+    let buffer = '';
+    const KEYWORD = 'elzein';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Backspace') {
+        buffer = buffer.slice(0, -1);
+        return;
+      }
+      if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        buffer = (buffer + e.key.toLowerCase()).slice(-KEYWORD.length);
+        if (buffer === KEYWORD) {
+          setShowSalesEasterEgg((prev) => !prev);
+          buffer = '';
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Card Inspection State
   const [tokenInput, setTokenInput] = useState(tokenFromUrl);
@@ -453,19 +477,21 @@ function ActivationContent() {
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
 
-                      <div className="pt-2 text-center">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setLoginEmail('sales@octotap.com');
-                            setLoginPassword('password123');
-                          }}
-                          className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
-                        >
-                          <Sparkles className="w-3 h-3" />
-                          <span>Gunakan Akun Demo Sales (sales@octotap.com)</span>
-                        </button>
-                      </div>
+                      {showSalesEasterEgg && (
+                        <div className="pt-2 text-center animate-in fade-in duration-200">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLoginEmail('sales@octotap.com');
+                              setLoginPassword('password123');
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
+                          >
+                            <Sparkles className="w-3 h-3" />
+                            <span>Mode Rahasia: Gunakan Akun Demo Sales (sales@octotap.com)</span>
+                          </button>
+                        </div>
+                      )}
                     </form>
                   </div>
                 ) : (

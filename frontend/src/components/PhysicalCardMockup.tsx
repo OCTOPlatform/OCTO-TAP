@@ -246,7 +246,9 @@ export const PhysicalCardMockup: React.FC<PhysicalCardMockupProps> = ({
             {/* Business & Google Review Call-to-Action */}
             <div className="my-0.5">
               <h4 className={`text-sm font-bold tracking-wide truncate max-w-[240px] ${currentStyles.titleColor}`}>
-                {businessName || 'Nama Toko / Bisnis'}
+                {businessName && businessName.toLowerCase() !== 'bisnis' && businessName.toLowerCase() !== 'nama usaha / bisnis'
+                  ? businessName
+                  : 'Review Us on Google'}
               </h4>
               <div className="flex items-center justify-center gap-1 mt-1">
                 {[1, 2, 3, 4, 5].map((i) => (
@@ -254,7 +256,9 @@ export const PhysicalCardMockup: React.FC<PhysicalCardMockupProps> = ({
                 ))}
               </div>
               <p className={`text-[10px] mt-0.5 font-medium ${currentStyles.subtitleColor}`}>
-                Tap NFC atau Scan QR untuk Review Google
+                {businessName && businessName.toLowerCase() !== 'bisnis'
+                  ? 'Beri Ulasan Google Terbaik Anda'
+                  : 'Tap NFC atau Scan QR Code'}
               </p>
             </div>
 

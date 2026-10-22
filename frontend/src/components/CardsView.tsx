@@ -22,11 +22,15 @@ import {
   ShieldCheck,
   AlertCircle,
   RotateCcw,
-  MapPin
+  MapPin,
+  Archive,
+  FolderDown,
+  Loader2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card, Business, ProductionEvent, CardStatus } from '@/types';
 import { PhysicalCardMockup } from './PhysicalCardMockup';
+import { generateBulkProductionZip, CardDesignTheme, BulkCardItem } from '@/lib/cardExport';
 
 interface CardsViewProps {
   initialBusinessForBatch?: Business | null;
@@ -62,6 +66,22 @@ export const CardsView: React.FC<CardsViewProps> = ({
   const [stockQuantity, setStockQuantity] = useState(25);
   const [stockLoading, setStockLoading] = useState(false);
   const [stockError, setStockError] = useState<string | null>(null);
+
+  // Bulk Export State (Model B Mass Production)
+  const [isBulkExportModalOpen, setIsBulkExportModalOpen] = useState(false);
+  const [bulkExportTheme, setBulkExportTheme] = useState<CardDesignTheme>('octo_navy');
+  const [bulkExportType, setBulkExportType] = useState<'all' | 'artwork_only' | 'labels_only'>('all');
+  const [bulkExportBatch, setBulkExportBatch] = useState<string>('all_unassigned');
+  const [bulkExporting, setBulkExporting] = useState(false);
+  const [bulkExportProgress, setBulkExportProgress] = useState<{
+    current: number;
+    total: number;
+    cardCode: string;
+    percent: number;
+    status: string;
+  } | null>(null);
+  const [bulkExportSuccess, setBulkExportSuccess] = useState<string | null>(null);
+  const [bulkExportError, setBulkExportError] = useState<string | null>(null);
 
   // Assign & Activate Modal (For Model B Stock Cards)
   const [cardToAssign, setCardToAssign] = useState<Card | null>(null);
@@ -163,13 +183,73 @@ export const CardsView: React.FC<CardsViewProps> = ({
     setStockLoading(true);
     try {
       const idempotencyKey = `stock-client-${Date.now()}`;
-      await api.batchIssueStockCards(Number(stockQuantity), idempotencyKey);
+      const res = await api.batchIssueStockCards(Number(stockQuantity), idempotencyKey);
       setIsStockModalOpen(false);
       loadCards();
+      if (res && res.batch_id) {
+        openBulkExportModal(res.batch_id);
+      }
     } catch (err: any) {
       setStockError(err.message || 'Gagal menerbitkan stok kartu massal');
     } finally {
       setStockLoading(false);
+    }
+  };
+
+  const openBulkExportModal = (batchId?: string) => {
+    if (batchId) {
+      setBulkExportBatch(batchId);
+    } else {
+      setBulkExportBatch('all_unassigned');
+    }
+    setBulkExportProgress(null);
+    setBulkExportSuccess(null);
+    setBulkExportError(null);
+    setIsBulkExportModalOpen(true);
+  };
+
+  const handleStartBulkExport = async () => {
+    setBulkExportError(null);
+    setBulkExportSuccess(null);
+    setBulkExporting(true);
+
+    try {
+      const res = await api.getCards({
+        batch_id: bulkExportBatch !== 'all_unassigned' && bulkExportBatch !== 'all' ? bulkExportBatch : undefined,
+        limit: 500,
+      });
+
+      let targetCards = res.cards || [];
+      if (bulkExportBatch === 'all_unassigned') {
+        targetCards = targetCards.filter((c) => !c.business_id);
+      }
+
+      if (!targetCards.length) {
+        throw new Error('Tidak ada kartu stok yang cocok dengan pilihan untuk diekspor.');
+      }
+
+      const items: BulkCardItem[] = targetCards.map((c) => ({
+        id: c.id,
+        cardCode: c.card_code,
+        token: c.token,
+        batchId: c.batch_id,
+        businessName: c.business_name || 'Review Us on Google',
+        qrCodeUrl: c.qr_code_url || api.getQRDownloadUrl(c.id),
+        redirectUrl: api.getRedirectUrl(c.token),
+      }));
+
+      await generateBulkProductionZip({
+        cards: items,
+        theme: bulkExportTheme,
+        exportType: bulkExportType,
+        onProgress: (prog) => setBulkExportProgress(prog),
+      });
+
+      setBulkExportSuccess(`Berhasil mengunduh ZIP paket produksi massal (${items.length} kartu)!`);
+    } catch (err: any) {
+      setBulkExportError(err.message || 'Gagal memproses ekspor massal: ' + (err.message || ''));
+    } finally {
+      setBulkExporting(false);
     }
   };
 
@@ -413,6 +493,15 @@ export const CardsView: React.FC<CardsViewProps> = ({
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           <button
+            onClick={() => openBulkExportModal()}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 text-xs font-semibold shadow-md shadow-amber-500/10 transition-all cursor-pointer"
+            title="Download ZIP massal file desain cetak UV dan lembar kontrol Model B"
+          >
+            <Archive className="w-4 h-4 text-amber-400" />
+            <span>📥 Bulk Download Desain (Model B)</span>
+          </button>
+
+          <button
             onClick={() => {
               setIsStockModalOpen(true);
               setStockError(null);
@@ -536,7 +625,10 @@ export const CardsView: React.FC<CardsViewProps> = ({
                         <>
                           <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold">
                             <Package className="w-3 h-3" />
-                            <span>STOK GUDANG (MODEL B)</span>
+                            <span>STOK MODEL B</span>
+                          </div>
+                          <div className="text-[11px] text-amber-200/90 font-medium mt-0.5">
+                            Review Us on Google
                           </div>
                           <div className="font-mono text-[10px] text-slate-400 truncate mt-0.5" title={c.token}>
                             Token: {c.token.substring(0, 16)}...
@@ -1045,7 +1137,7 @@ export const CardsView: React.FC<CardsViewProps> = ({
                   Visualisasi Fisik Kartu Akrilik (100×100 mm)
                 </h4>
                 <PhysicalCardMockup
-                  businessName={activeCardDetail.card.business_name || 'Bisnis'}
+                  businessName={activeCardDetail.card.business_name || ''}
                   cardCode={activeCardDetail.card.card_code}
                   token={activeCardDetail.card.token}
                   qrCodeUrl={activeCardDetail.card.qr_code_url}
@@ -1363,6 +1455,231 @@ export const CardsView: React.FC<CardsViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Modal: Bulk Download Desain Model B */}
+      {isBulkExportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+                  <Archive className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">
+                    Bulk Download Desain Cetak (Model B)
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Unduh file siap cetak UV &amp; lembar kontrol produksi secara massal (ZIP).
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  if (!bulkExporting) setIsBulkExportModalOpen(false);
+                }}
+                disabled={bulkExporting}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {bulkExportError && (
+              <div className="mt-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{bulkExportError}</span>
+              </div>
+            )}
+
+            {bulkExportSuccess && (
+              <div className="mt-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{bulkExportSuccess}</span>
+              </div>
+            )}
+
+            <div className="space-y-4 mt-5">
+              {/* Teks Standar Model B Info */}
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-amber-300 uppercase tracking-wider">
+                    Format Standar Stok Massal
+                  </span>
+                  <span className="text-[10px] text-amber-400/80 font-mono">100×100 mm (300 DPI)</span>
+                </div>
+                <div className="text-xs text-white font-bold flex items-center gap-1.5">
+                  <span>Teks Kartu: &quot;Review Us on Google&quot;</span>
+                  <span className="text-amber-400">⭐⭐⭐⭐⭐</span>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Setiap kartu dicetak dengan QR Code dan kode fisik unik (anti-tertukar) yang siap diaktifkan tim sales ke bisnis mana pun kapan saja.
+                </p>
+              </div>
+
+              {/* Pilihan Batch Kartu */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Pilih Batch Kartu yang Ingin Diunduh
+                </label>
+                <select
+                  value={bulkExportBatch}
+                  onChange={(e) => setBulkExportBatch(e.target.value)}
+                  disabled={bulkExporting}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                >
+                  <option value="all_unassigned">
+                    📦 Semua Kartu Stok Gudang Belum Terikat (Model B)
+                  </option>
+                  <option value="all">
+                    🌐 Semua Kartu di Database (Termasuk yang Sudah Terikat)
+                  </option>
+                  {Array.from(new Set(cards.map((c) => c.batch_id).filter(Boolean))).map((bid) => (
+                    <option key={bid} value={bid}>
+                      Batch: {bid}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Pilihan Tema Warna */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Pilih Tema Desain Kartu Akrilik
+                </label>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {[
+                    { id: 'octo_navy', label: 'OCTO Signature', color: 'bg-cyan-500', desc: 'Navy & Cyan Glow' },
+                    { id: 'octo_frosted', label: 'Frosted Glass', color: 'bg-slate-300', desc: 'Bening Glassmorphism' },
+                    { id: 'google_white', label: 'Google White', color: 'bg-blue-500', desc: 'Clean Putih Google' },
+                    { id: 'luxury_gold', label: 'Black & Gold', color: 'bg-amber-400', desc: 'Hitam Emas Mewah' },
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setBulkExportTheme(t.id as CardDesignTheme)}
+                      disabled={bulkExporting}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        bulkExportTheme === t.id
+                          ? 'bg-slate-800 border-amber-500 text-white shadow-md shadow-amber-500/10'
+                          : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-semibold text-xs">
+                        <span className={`w-2.5 h-2.5 rounded-full ${t.color}`} />
+                        <span>{t.label}</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">{t.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Pilihan Konten File yang Diekspor */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Isi Paket File ZIP yang Diunduh
+                </label>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setBulkExportType('all')}
+                    disabled={bulkExporting}
+                    className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                      bulkExportType === 'all'
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="text-[11px]">📦 Paket Lengkap</div>
+                    <div className="text-[9px] text-slate-400 mt-0.5">Artwork + Label QR</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBulkExportType('artwork_only')}
+                    disabled={bulkExporting}
+                    className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                      bulkExportType === 'artwork_only'
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="text-[11px]">🎨 Hanya Artwork</div>
+                    <div className="text-[9px] text-slate-400 mt-0.5">Mesin UV Print</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBulkExportType('labels_only')}
+                    disabled={bulkExporting}
+                    className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                      bulkExportType === 'labels_only'
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="text-[11px]">📋 Hanya Lembar QC</div>
+                    <div className="text-[9px] text-slate-400 mt-0.5">Kontrol NFC &amp; QR</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Progress Bar saat mengekspor */}
+              {bulkExporting && bulkExportProgress && (
+                <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-amber-300 font-medium flex items-center gap-1.5">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                      <span>{bulkExportProgress.status}</span>
+                    </span>
+                    <span className="text-slate-400 font-mono text-[11px]">
+                      {bulkExportProgress.percent}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-amber-500 to-amber-400 h-full transition-all duration-200 rounded-full"
+                      style={{ width: `${bulkExportProgress.percent}%` }}
+                    />
+                  </div>
+                  <div className="text-[10px] text-slate-500 flex justify-between">
+                    <span>Sedang memproses kartu beresolusi tinggi...</span>
+                    <span>{bulkExportProgress.current} / {bulkExportProgress.total}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsBulkExportModalOpen(false)}
+                  disabled={bulkExporting}
+                  className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-50"
+                >
+                  Tutup
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartBulkExport}
+                  disabled={bulkExporting}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {bulkExporting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Sedang Mengenerate ZIP...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FolderDown className="w-4 h-4" />
+                      <span>Mulai Download Paket ZIP</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

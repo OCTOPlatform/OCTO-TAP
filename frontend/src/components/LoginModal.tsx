@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Mail, KeyRound, AlertCircle, Sparkles, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, KeyRound, AlertCircle, Sparkles, ArrowRight, ShieldCheck, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { AdminUser } from '@/types';
 
@@ -10,10 +10,44 @@ interface LoginModalProps {
 }
 
 export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
-  const [email, setEmail] = useState('admin@octotap.com');
-  const [password, setPassword] = useState('AdminOCTO2026!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showEasterEgg, setShowEasterEgg] = useState(false);
+  const [eggToast, setEggToast] = useState(false);
+
+  // Easter egg: mendeteksi pengetikan kata kunci "elzein"
+  useEffect(() => {
+    let buffer = '';
+    const KEYWORD = 'elzein';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Backspace') {
+        buffer = buffer.slice(0, -1);
+        return;
+      }
+
+      // Tangkap karakter tunggal (mengabaikan Ctrl, Alt, Meta)
+      if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        buffer = (buffer + e.key.toLowerCase()).slice(-KEYWORD.length);
+        if (buffer === KEYWORD) {
+          setShowEasterEgg((prev) => {
+            const next = !prev;
+            if (next) {
+              setEggToast(true);
+              setTimeout(() => setEggToast(false), 3500);
+            }
+            return next;
+          });
+          buffer = '';
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,6 +98,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
             Masuk ke Dashboard Manajemen Kartu Google Review NFC & QR
           </p>
         </div>
+
+        {eggToast && (
+          <div className="mb-4 p-2.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-cyan-500/20 border border-amber-500/40 text-amber-300 text-xs flex items-center justify-center gap-2 animate-pulse relative z-10 shadow-lg">
+            <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="font-medium">Easter Egg Terbuka: Shortcut Akun Diaktifkan!</span>
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
@@ -119,31 +160,47 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
           </button>
         </form>
 
-        {/* Demo Quick Buttons */}
-        <div className="mt-5 pt-4 border-t border-slate-800 text-center relative z-10 space-y-2">
-          <div className="flex items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={handleFillDemo}
-              className="inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Akun Admin</span>
-            </button>
-            <span className="text-slate-600">•</span>
-            <button
-              type="button"
-              onClick={handleFillSales}
-              className="inline-flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Akun Sales Lapangan</span>
-            </button>
+        {/* Easter Egg Panel (Hidden by default, triggered by typing "elzein") */}
+        {showEasterEgg && (
+          <div className="mt-5 pt-4 border-t border-slate-800 relative z-10 space-y-2.5 transition-all animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+              <span className="inline-flex items-center gap-1.5 text-amber-400 font-medium">
+                <Sparkles className="w-3.5 h-3.5" />
+                Mode Rahasia (Easter Egg Aktif)
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowEasterEgg(false)}
+                className="text-slate-500 hover:text-slate-300 p-0.5 rounded transition-colors cursor-pointer"
+                title="Tutup shortcut"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handleFillDemo}
+                className="py-2 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 hover:text-emerald-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm shadow-emerald-500/10"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Akun Admin</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleFillSales}
+                className="py-2 px-3 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 hover:text-cyan-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm shadow-cyan-500/10"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Akun Sales Lapangan</span>
+              </button>
+            </div>
+            <p className="text-[10px] text-slate-500 text-center">
+              Klik akun di atas untuk mengisi kredensial login otomatis.
+            </p>
           </div>
-          <div className="text-[10px] text-slate-500 font-mono">
-            {email}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
